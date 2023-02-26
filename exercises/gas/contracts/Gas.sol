@@ -44,7 +44,9 @@ contract GasContract {
         GroupPayment
     }
 
-    History[] public paymentHistory; // when a payment was updated
+    // Changed to private since there is a getter method below
+    // Decreases deployment cost by about 0.2 percent
+    History[] private paymentHistory; // when a payment was updated
 
     struct Payment {
         PaymentType paymentType;
@@ -96,32 +98,33 @@ contract GasContract {
         _;
     }
 
-    modifier checkIfWhiteListed(address sender) {
-        // Simplify Checks
-        // Decreases Deployment Cost by 0.7%
+    // Change modifier to within function check since used only once
+    // modifier checkIfWhiteListed(address sender) {
+    // Simplify Checks
+    // Decreases Deployment Cost by 0.7%
 
-        // sender will always be msg.sender?
-        // since this is a modifier which calls checkIfWhiteListed(msg.sender)
-        // address senderOfTx = msg.sender;
-        // require(
-        //     senderOfTx == sender,
-        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
-        // );
-        uint256 usersTier = whitelist[sender];
-        // require(
-        //     usersTier > 0,
-        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
-        // );
-        // require(
-        //     usersTier < 4,
-        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly"
-        // );
+    // sender will always be msg.sender?
+    // since this is a modifier which calls checkIfWhiteListed(msg.sender)
+    // address senderOfTx = msg.sender;
+    // require(
+    //     senderOfTx == sender,
+    //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
+    // );
+    // uint256 usersTier = whitelist[sender];
+    // require(
+    //     usersTier > 0,
+    //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
+    // );
+    // require(
+    //     usersTier < 4,
+    //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly"
+    // );
 
-        if (usersTier <= 0 || usersTier >= 4) {
-            revert NotWhiteListed();
-        }
-        _;
-    }
+    //     if (usersTier <= 0 || usersTier >= 4) {
+    //         revert NotWhiteListed();
+    //     }
+    //     _;
+    // }
 
     event supplyChanged(address indexed, uint256 indexed);
     event Transfer(address recipient, uint256 amount);
@@ -137,47 +140,53 @@ contract GasContract {
         contractOwner = msg.sender;
         totalSupply = _totalSupply;
 
-        for (uint256 ii = 0; ii < administrators.length; ii++) {
-            if (_admins[ii] != address(0)) {
-                administrators[ii] = _admins[ii];
-                if (_admins[ii] == contractOwner) {
-                    balances[contractOwner] = totalSupply;
-                } else {
-                    balances[_admins[ii]] = 0;
-                }
-                if (_admins[ii] == contractOwner) {
-                    emit supplyChanged(_admins[ii], totalSupply);
-                } else if (_admins[ii] != contractOwner) {
-                    emit supplyChanged(_admins[ii], 0);
+        // ++ii instead of ii++ saves 50 gas in terms of deployment
+        // renaming ii to i does not seem to save gas
+        for (uint256 i = 0; i < administrators.length; ++i) {
+            if (_admins[i] != address(0)) {
+                administrators[i] = _admins[i];
+                if (_admins[i] == contractOwner) {
+                    // Contract Owner is not necessarily an administrator?
+                    balances[_admins[i]] = totalSupply;
+                    emit supplyChanged(_admins[i], totalSupply);
                 }
             }
         }
     }
 
+    // Changed to 'external view' from 'public payable'
+    // Decreases deployment cost by 0.2%
     function getPaymentHistory()
-        public
-        payable
+        external
+        view
         returns (History[] memory paymentHistory_)
     {
         return paymentHistory;
     }
 
-    function checkForAdmin(address _user) public view returns (bool admin_) {
-        bool admin = false;
-        for (uint256 ii = 0; ii < administrators.length; ii++) {
+    // Remove declaration of admin variable
+    // Increases deployment cost by ~1000
+    // But decreases updatePayment and addToWhiteList by ~200
+    function checkForAdmin(address _user) public view returns (bool) {
+        // bool admin = false;
+        // pre-increment - ++ii instead of ii++ decreased deployment cost by 450, and 20 gas for addToWhitelist and UpdatePayment
+        // Changing administrators.length to 5 (a value decided at the start) does not affect gas costs
+        for (uint256 ii = 0; ii < administrators.length; ++ii) {
             if (administrators[ii] == _user) {
-                admin = true;
+                return true;
             }
         }
-        return admin;
+        return false;
     }
 
-    function balanceOf(address _user) public view returns (uint256 balance_) {
-        uint256 balance = balances[_user];
-        return balance;
+    // Removal of balance variable actually decreased deployment cost by ~1000
+    // Changing to external did not affect deployment cost
+    function balanceOf(address _user) external view returns (uint256) {
+        // uint256 balance = balances[_user];
+        return balances[_user];
     }
 
-    function getTradingMode() public view returns (bool mode_) {
+    function getTradingMode() public pure returns (bool) {
         // Nothing changes tradeFlag and dividendFlag
         return true;
         // bool mode = false;
@@ -189,20 +198,21 @@ contract GasContract {
         // return mode;
     }
 
-    function addHistory(address _updateAddress, bool _tradeMode)
-        public
-        returns (bool status_, bool tradeMode_)
-    {
+    // returns (bool status_, bool tradeMode_)
+    // Seems unnecessary
+    // Decreases deployment cost by 0.3%
+    // Decreases updatePayment by 3000 gas
+    function addHistory(address _updateAddress) private {
         History memory history;
         history.blockNumber = block.number;
         history.lastUpdate = block.timestamp;
         history.updatedBy = _updateAddress;
         paymentHistory.push(history);
-        bool[] memory status = new bool[](tradePercent);
-        for (uint256 i = 0; i < tradePercent; i++) {
-            status[i] = true;
-        }
-        return ((status[0] == true), _tradeMode);
+        // bool[] memory status = new bool[](tradePercent);
+        // for (uint256 i = 0; i < tradePercent; i++) {
+        //     status[i] = true;
+        // }
+        // return ((status[0] == true), _tradeMode);
     }
 
     function getPayments(address _user)
@@ -277,8 +287,8 @@ contract GasContract {
                 payments[_user][ii].admin = _user;
                 payments[_user][ii].paymentType = _type;
                 payments[_user][ii].amount = _amount;
-                bool tradingMode = getTradingMode();
-                addHistory(_user, tradingMode);
+                // bool tradingMode = getTradingMode();
+                addHistory(_user);
                 emit PaymentUpdated(
                     senderOfTx,
                     _ID,
@@ -321,12 +331,20 @@ contract GasContract {
         emit AddedToWhitelist(_userAddrs, _tier);
     }
 
+    // Removed use of checkIfWhiteListed(msg.sender) modifier since used only once
     function whiteTransfer(
         address _recipient,
         uint256 _amount,
         ImportantStruct memory _struct
-    ) public checkIfWhiteListed(msg.sender) {
+    ) public {
         address senderOfTx = msg.sender;
+
+        uint256 usersTier = whitelist[senderOfTx];
+
+        if (usersTier <= 0 || usersTier >= 4) {
+            revert NotWhiteListed();
+        }
+
         require(
             balances[senderOfTx] >= _amount,
             "Gas Contract - whiteTransfers function - Sender has insufficient Balance"
