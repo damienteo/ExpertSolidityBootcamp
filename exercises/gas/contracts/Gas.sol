@@ -1,26 +1,41 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.0;
+pragma solidity ^0.8.17; // Update minor version to 17 from 0, actually decreases deployment cost by 0.2%, and a bit of gas cost
 
-import "./Ownable.sol";
+// Contract already has onlyAdminOrOwner implementation
+// Decreases deployment cost by 0.8%
+// import "./Ownable.sol";
 
 // Constants are either not used or not re-declared
+// Decreases deployment cost by 0.3%
 // contract Constants {
 // uint256 public tradeFlag = 1;
 // uint256 public basicFlag = 0;
 // uint256 public dividendFlag = 1;
 // }
 
-contract GasContract is Ownable {
-    uint256 public totalSupply = 0; // cannot be updated
-    uint256 public paymentCounter = 0;
+error NotAdminOrOwner();
+error NotWhiteListed();
+
+contract GasContract {
+    // Remove un-necessary declarations as 0
+    // Mainly decreases deployment cost
+
+    // Comment out unused variables
+    // uint256 public tradeMode;
+    // bool public isReady = false;
+    // PaymentType constant defaultPayment = PaymentType.Unknown;
+    uint256 public totalSupply; // cannot be updated
+    uint256 public paymentCounter;
     mapping(address => uint256) public balances;
-    uint256 public tradePercent = 12;
+    // Set to constant as it never changes
+    // Decreases deployment cost by 0.1%
+    uint256 public constant tradePercent = 12;
     address public contractOwner;
-    uint256 public tradeMode = 0;
+
     mapping(address => Payment[]) public payments;
     mapping(address => uint256) public whitelist;
     address[5] public administrators;
-    bool public isReady = false;
+
     enum PaymentType {
         Unknown,
         BasicPayment,
@@ -28,7 +43,6 @@ contract GasContract is Ownable {
         Dividend,
         GroupPayment
     }
-    PaymentType constant defaultPayment = PaymentType.Unknown;
 
     History[] public paymentHistory; // when a payment was updated
 
@@ -61,36 +75,51 @@ contract GasContract is Ownable {
 
     modifier onlyAdminOrOwner() {
         address senderOfTx = msg.sender;
-        if (checkForAdmin(senderOfTx)) {
-            require(
-                checkForAdmin(senderOfTx),
-                "Gas Contract Only Admin Check-  Caller not admin"
-            );
-            _;
-        } else if (senderOfTx == contractOwner) {
-            _;
-        } else {
-            revert(
-                "Error in Gas contract - onlyAdminOrOwner modifier : revert happened because the originator of the transaction was not the admin, and furthermore he wasn't the owner of the contract, so he cannot run this function"
-            );
+        // Simplified error check
+        // Reduces deployment cost by 12.1%
+        //  if (checkForAdmin(senderOfTx)) {
+        //     require(
+        //         checkForAdmin(senderOfTx),
+        //         "Gas Contract Only Admin Check-  Caller not admin"
+        //     );
+        //     _;
+        // } else if (senderOfTx == contractOwner) {
+        //     _;
+        // } else {
+        //     revert(
+        //         "Error in Gas contract - onlyAdminOrOwner modifier : revert happened because the originator of the transaction was not the admin, and furthermore he wasn't the owner of the contract, so he cannot run this function"
+        //     );
+        // }
+        if (!checkForAdmin(senderOfTx) || senderOfTx != contractOwner) {
+            revert NotAdminOrOwner();
         }
+        _;
     }
 
     modifier checkIfWhiteListed(address sender) {
-        address senderOfTx = msg.sender;
-        require(
-            senderOfTx == sender,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
-        );
-        uint256 usersTier = whitelist[senderOfTx];
-        require(
-            usersTier > 0,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
-        );
-        require(
-            usersTier < 4,
-            "Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly"
-        );
+        // Simplify Checks
+        // Decreases Deployment Cost by 0.7%
+
+        // sender will always be msg.sender?
+        // since this is a modifier which calls checkIfWhiteListed(msg.sender)
+        // address senderOfTx = msg.sender;
+        // require(
+        //     senderOfTx == sender,
+        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the originator of the transaction was not the sender"
+        // );
+        uint256 usersTier = whitelist[sender];
+        // require(
+        //     usersTier > 0,
+        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user is not whitelisted"
+        // );
+        // require(
+        //     usersTier < 4,
+        //     "Gas Contract CheckIfWhiteListed modifier : revert happened because the user's tier is incorrect, it cannot be over 4 as the only tier we have are: 1, 2, 3; therfore 4 is an invalid tier for the whitlist of this contract. make sure whitlist tiers were set correctly"
+        // );
+
+        if (usersTier <= 0 || usersTier >= 4) {
+            revert NotWhiteListed();
+        }
         _;
     }
 
